@@ -1,0 +1,10 @@
+# Ignore IDE project files
+/.idea
+
+# Generated files from cmake
+/build
+/cmake-build-debug*
+/cmake-build-release*
+
+# Ignore generated files from application
+/debug

@@ -1,0 +1,49 @@
+cmake_minimum_required(VERSION 3.20)
+cmake_policy(SET CMP0097 NEW)
+project(lexer_dfa)
+
+add_library(${PROJECT_NAME}
+        src/builder.cpp
+        src/dfa.cpp
+        src/label.cpp
+        src/token.cpp
+)
+
+target_include_directories(${PROJECT_NAME}
+        PUBLIC
+        include
+)
+
+target_link_libraries(${PROJECT_NAME}
+        PRIVATE
+        boost_hash
+)
+
+add_library(${PROJECT_NAME}_tools
+        tools/src/graphviz.cpp
+)
+
+target_include_directories(${PROJECT_NAME}_tools
+        PUBLIC
+        tools/include
+)
+
+target_link_libraries(${PROJECT_NAME}_tools
+        ${PROJECT_NAME}
+        lexer_common
+)
+
+add_executable(${PROJECT_NAME}_tests
+        tests/dfa_test.cpp
+)
+
+target_link_libraries(${PROJECT_NAME}_tests
+        PRIVATE
+        ${PROJECT_NAME}
+        ${PROJECT_NAME}_tools
+        gtest_main
+)
+
+add_test(NAME ${PROJECT_NAME}_tests COMMAND ${PROJECT_NAME}_tests)
+
+target_compile_definitions(${PROJECT_NAME}_tests PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")

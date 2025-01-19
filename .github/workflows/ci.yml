@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Print OS details
+        run: |
+          uname -a
+          lsb_release -a
+
+      - name: Checkout code with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcovr ninja-build
+
+      - name: Check GCC and gcovr version
+        run: |
+          g++ --version
+          gcov --version
+          gcovr --version
+
+      - name: Configure build with CMake
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          mkdir build
+          cd build
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="--coverage -fprofile-abs-path"
+
+      - name: Build with CMake
+        run: |
+          cd build
+          cmake --build .
+
+      - name: Run tests with CTest
+        run: |
+          cd build
+          ctest --output-on-failure
+
+      - name: Generate code coverage report
+        run: |
+          cd build
+          gcovr --root .. --gcov-executable gcov --xml-pretty --output coverage.xml \
+                --exclude '.*/external/.*' \
+                --exclude '.*/googletest/.*' \
+                --exclude '.*/tests/.*'
+          gcovr --root .. --gcov-executable gcov --html --html-details --output coverage.html \
+                --exclude '.*/external/.*' \
+                --exclude '.*/googletest/.*' \
+                --exclude '.*/tests/.*'
+          gcovr --root .. --gcov-executable gcov --txt-metric branch \
+                --exclude '.*/external/.*' \
+                --exclude '.*/googletest/.*' \
+                --exclude '.*/tests/.*' \
+                --print-summary
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: build/coverage.xml
+          flags: unittests
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}

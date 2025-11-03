@@ -1,4 +1,5 @@
 add_subdirectory(common)
+add_subdirectory(core)
 add_subdirectory(dfa)
 add_subdirectory(nfa)
 add_subdirectory(regex)

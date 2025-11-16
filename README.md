@@ -1,5 +1,5 @@
 <div style="text-align: center; padding: 20px 0;">
-  <img src="docs/logo_wide.png" alt="Lexer Logo" style="max-width: 60%; height: auto;">
+  <img src="docs/logo_wide.svg" alt="Logo" style="max-width: 60%; height: auto;">
 </div>
 
 <div style="text-align: center; margin-bottom: 1rem;">
@@ -8,7 +8,7 @@
   <img src="https://github.com/nnidhogg/lexer/actions/workflows/codeql.yml/badge.svg" alt="CodeQL">
   <img src="https://codecov.io/gh/nnidhogg/lexer/branch/master/graph/badge.svg" alt="Coverage">
   <img src="https://img.shields.io/github/license/nnidhogg/lexer" alt="License">
-  <img src="https://img.shields.io/github/v/release/nnidhogg/lexer" alt="Release">
+  <img src="https://img.shields.io/github/v/release/nnidhogg/lexer?include_prereleases&sort=semver" alt="Release">
 </div>
 
 # **Lexer Library**
@@ -55,13 +55,13 @@ Finite Automaton (DFA), ensuring efficient and deterministic tokenization.
     - `Tokenizer`: a streaming wrapper that repeatedly calls `Lexer` and:
         - yields tokens in order,
         - supports string-based input,
-        - returns an error object on invalid input.
+        - errors are reported when no registered token matches the current input position.
 
 ## **Usage Overview**
 
-### **Defining Token Types**
+### **Defining Token Kinds**
 
-Token types are defined as an `enum`:
+Token kinds are defined as an `enum` or as an integer type directly. Each token kind corresponds to a specific token:
 
 ```cpp
 enum class Token_kind : uint8_t
@@ -97,9 +97,91 @@ enum class Token_kind : uint8_t
 };
 ```
 
-### **Registering Tokens with the Builder**
+### **Defining Tokens**
 
-Tokens are registered using the `lexer::core::Builder` API:
+#### **1. Combinator Functions**
+
+Token patterns are built using a small, composable DSL inspired by regular expressions. Each combinator produces a
+*pattern object* that can be freely combined with other patterns and later registered with the `Builder`.
+
+Patterns are immutable, lightweight value objects and can be reused across multiple token definitions.
+
+##### **Primitive Combinators**
+
+- `text("abc")`: Matches the exact character sequence `"abc"`.
+- `any_of(set)`: Matches any single character contained in the provided character set.
+
+##### **Structural Combinators**
+
+- `concat(p1, p2, ...)`: Matches patterns sequentially from left to right.
+- `choice(p1, p2, ...)`: Matches the first successful alternative among the provided patterns.
+
+##### **Repetition Combinators**
+
+- `plus(p)`: Matches one or more repetitions of `p`.
+- `kleene(p)`: Matches zero or more repetitions of `p`.
+- `optional(p)`: Matches zero or one occurrence of `p`.
+- `exact(p, count)`: Matches exactly `count` repetitions of `p`.
+- `at_least(p, min)`: Matches `min` or more repetitions of `p`.
+- `range(p, min, max)`: Matches between `min` and `max` repetitions of `p`.
+
+##### **Example**
+
+```cpp
+using namespace lexer::regex;
+
+// Identifier: [A-Za-z_][A-Za-z0-9_]*
+const auto identifier = concat(any_of(Set::alpha() + '_'), kleene(any_of(Set::alphanum() + '_')));
+```
+
+#### **2. Builder Methods**
+
+The `lexer::core::Builder` is responsible for collecting token definitions and producing a deterministic lexer. It
+represents the *construction phase* of the lexer pipeline.
+
+Once `build()` is called, the resulting `Lexer` is immutable and safe to reuse across multiple inputs.
+
+### add_token(pattern, kind, priority)
+
+Registers a token definition composed of:
+
+- `pattern`: a regex-like combinator expression,
+- `kind`: a user-defined token kind (typically an enum),
+- `priority`: an integer used to resolve ambiguities.
+
+```cpp
+builder.add_token(pattern, Token_kind::Identifier, 4);
+```
+
+#### Priority Semantics
+
+- Lower priority values are matched first.
+- If multiple token patterns match the same input prefix, the token with the *lowest* priority value is selected.
+- Priority resolution is deterministic and performed during DFA construction.
+
+This mechanism allows keyword tokens to override more general patterns such as identifiers.
+
+### build()
+
+```cpp
+const auto lexer = builder.build();
+```
+
+Finalizes the builder and constructs a `lexer::core::Lexer`.
+
+During this step:
+
+- all registered patterns are combined,
+- a Non-deterministic Finite Automaton (NFA) is generated,
+- subset construction is applied to produce a Deterministic Finite Automaton (DFA).
+
+After calling `build()`:
+
+- the builder should be treated as immutable,
+- the returned lexer can be reused safely and efficiently,
+- no further tokens can be added to the same lexer instance.
+
+### Example
 
 ```cpp
 using namespace lexer;
@@ -142,7 +224,7 @@ The library provides two complementary ways to perform tokenization:
 #### **1. Core API (`lexer::core::Lexer`)**
 
 The core lexer performs direct tokenization on containers or iterators. It returns a pair containing the recognized
-token type and the number of characters consumed.
+token kind and the number of characters consumed.
 
 ```cpp
 using namespace lexer;
@@ -201,7 +283,7 @@ const auto [token, consumed] = lexer.tokenize<Token_kind>(input.begin(), input.e
 
 In both cases, the lexer returns:
 
-- the **token type** (`std::optional<Token_kind>`), which is empty if no valid token was matched, and
+- the **token kind** (`std::optional<Token_kind>`), which is empty if no valid token was matched, and
 - the **offset**, representing the number of characters consumed during the match.
 
 This API is efficient and lightweight, suitable for use in parsers or compiler front ends.
@@ -210,9 +292,6 @@ This API is efficient and lightweight, suitable for use in parsers or compiler f
 
 The Tokenizer builds on the core lexer to provide a streaming-based interface. It repeatedly calls the underlying
 `core::Lexer`, handling offsets, EOF detection, and error propagation automatically.
-
-The Tokenizer builds on the core lexer to provide a streaming-based interface for tokenization. It operates entirely on
-in-memory input, managing offsets, end-of-input detection, and error propagation automatically:
 
 ```cpp
 using namespace lexer;
@@ -247,32 +326,12 @@ for (;;)
 
 The tokenizer API uses an expected-like result type:
 
-- **Success**: Returns a value containing `std::optional<Token<Token_kind>>` with either the recognized token
-  or EOF (`std::nullopt`).
+- **Success**: Returns a value containing `std::optional<Token<Token_kind>>` with either the recognized token or EOF (
+  `std::nullopt`).
 - **Failure**: Returns an error object with position and textual description.
 
 Together, these two layers let you choose between fine-grained control (`core::Lexer`) and convenient streaming-based
 processing (`tools::tokenizer::Tokenizer`).
-
-## **API Summary**
-
-### **Combinator Functions**
-
-- `text(...)`: Matches a sequence of characters.
-- `any_of(...)`: Matches any character from a specified set.
-- `concat(...)`: Concatenates multiple patterns in sequence.
-- `choice(...)`: Chooses between multiple patterns.
-- `plus(...)`: Matches one or more repetitions of a pattern.
-- `kleene(...)`: Matches zero or more repetitions of a pattern.
-- `optional(...)`: Matches zero or one occurrence of a pattern.
-- `exact(count)`: Matches exactly `count` repetitions of a pattern.
-- `at_least(min)`: Matches at least `min` repetitions of a pattern.
-- `range(min, max)`: Matches between `min` and `max` repetitions of a pattern.
-
-### **Builder Methods**
-
-- `add_token(pattern, Token_kind, priority)`: Registers a token with a pattern, type, and priority.
-- `build()`: Builds and returns the lexer.
 
 ## **Getting Started**
 

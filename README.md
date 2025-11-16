@@ -1,5 +1,5 @@
 <div style="text-align: center; padding: 20px 0;">
-  <img src="docs/logo_wide.png" alt="Lexer Logo" style="max-width: 60%; height: auto;">
+  <img src="docs/logo_wide.svg" alt="Logo" style="max-width: 60%; height: auto;">
 </div>
 
 <div style="text-align: center; margin-bottom: 1rem;">
@@ -8,7 +8,7 @@
   <img src="https://github.com/nnidhogg/lexer/actions/workflows/codeql.yml/badge.svg" alt="CodeQL">
   <img src="https://codecov.io/gh/nnidhogg/lexer/branch/master/graph/badge.svg" alt="Coverage">
   <img src="https://img.shields.io/github/license/nnidhogg/lexer" alt="License">
-  <img src="https://img.shields.io/github/v/release/nnidhogg/lexer" alt="Release">
+  <img src="https://img.shields.io/github/v/release/nnidhogg/lexer?include_prereleases&sort=semver" alt="Release">
 </div>
 
 # **Lexer Library**
